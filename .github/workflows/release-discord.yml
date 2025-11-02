@@ -13,6 +13,11 @@ jobs:
       group: release-discord
       cancel-in-progress: false
     steps:
+      - name: Wait for GitHub propagation
+        run: |
+          echo "Waiting 180s for assets (latest.yml, exe) to propagate..."
+          sleep 180
+
       - name: Post release to Discord
         continue-on-error: true
         env:
