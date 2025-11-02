@@ -18,22 +18,23 @@ jobs:
         env:
           WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           TAG: ${{ github.event.release.tag_name }}
-          NAME: ${{ github.event.release.name }}
           URL: ${{ github.event.release.html_url }}
           BODY: ${{ github.event.release.body }}
         run: |
           body_trunc="$(printf '%s' "$BODY" | head -c 1800)"
-          jq -n --arg title "Nouvelle release $TAG" \
+          jq -n --arg title "Mise à jour disponible ($TAG)" \
                 --arg url "$URL" \
                 --arg desc "$body_trunc" \
                 '{
-                  username: "Releases",
-                  allowed_mentions: { parse: [] },
+                  content: "@everyone",
+                  username: "RSLTools - Mise à jour",
+                  allowed_mentions: { parse: ["everyone"] },
                   embeds: [{
                     title: $title,
                     url: $url,
                     description: $desc,
-                    color: 5814783,
+                    color: 52336,
+                    footer: { text: "Copyright RSLTools 2025" },
                     timestamp: (now | todate)
                   }]
                 }' \
