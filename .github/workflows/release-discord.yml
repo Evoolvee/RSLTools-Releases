@@ -39,7 +39,7 @@ jobs:
                     url: $url,
                     description: $desc,
                     color: 52336,
-                    footer: { text: "Copyright RSLTools 2025" },
+                    footer: { text: "© RSLTools 2025" },
                     timestamp: (now | todate)
                   }]
                 }' \
