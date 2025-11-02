@@ -28,41 +28,35 @@ jobs:
           owner="${REPO%/*}"
           repo="${REPO#*/}"
 
-          echo "::group::Check non-empty release body"
+          # Wait for non-empty body
           for i in {1..20}; do
             body_len=$(curl -sS -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               "https://api.github.com/repos/$owner/$repo/releases/tags/$TAG" \
               | jq -r '.body // ""' | wc -c)
-            if [ "$body_len" -gt 5 ]; then
-              echo "Body OK (length=$body_len)"; break
-            fi
+            if [ "$body_len" -gt 5 ]; then echo "Body OK ($body_len)"; break; fi
             echo "Body empty, retry $i/20…"; sleep 30
             if [ "$i" -eq 20 ]; then echo "Timeout waiting body"; exit 1; fi
           done
-          echo "::endgroup::"
 
-          echo "::group::Resolve latest.yml URL"
+          # Resolve latest.yml
           LATEST_URL=$(curl -sS -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/$owner/$repo/releases/tags/$TAG" \
             | jq -r '.assets[] | select(.name=="latest.yml") | .browser_download_url')
           if [ -z "$LATEST_URL" ] || [ "$LATEST_URL" = "null" ]; then
-            echo "latest.yml not found in assets"; exit 1
+            echo "latest.yml not found"; exit 1
           fi
-          echo "latest.yml: $LATEST_URL"
-          echo "::endgroup::"
 
-          echo "::group::Wait latest.yml reachable"
+          # Follow redirects (-L) and accept 200
           for i in {1..20}; do
-            code=$(curl -s -o /dev/null -w "%{http_code}" "$LATEST_URL")
+            code=$(curl -L -s -o /dev/null -w "%{http_code}" "$LATEST_URL")
             if [ "$code" = "200" ]; then echo "latest.yml OK (200)"; break; fi
             echo "latest.yml $code, retry $i/20…"; sleep 30
             if [ "$i" -eq 20 ]; then echo "Timeout waiting latest.yml"; exit 1; fi
           done
-          echo "::endgroup::"
 
-          # Expose release body pour l'étape suivante
+          # Export body for next step
           curl -sS -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/$owner/$repo/releases/tags/$TAG" \
@@ -77,7 +71,6 @@ jobs:
         run: |
           BODY="$(cat body.txt)"
           body_trunc="$(printf '%s' "$BODY" | head -c 1800)"
-
           jq -n --arg title "Mise à jour disponible ($TAG)" \
                 --arg url "$URL" \
                 --arg desc "$body_trunc" \
@@ -85,11 +78,8 @@ jobs:
                   username: "RSLTools - Mise à jour",
                   allowed_mentions: { parse: [] },
                   embeds: [{
-                    title: $title,
-                    url: $url,
-                    description: $desc,
-                    color: 52336,
-                    footer: { text: "© RSLTools 2025" },
+                    title: $title, url: $url, description: $desc,
+                    color: 52336, footer: { text: "© RSLTools 2025" },
                     timestamp: (now | todate)
                   }]
                 }' \
