@@ -30,7 +30,6 @@ jobs:
                 --arg url "$URL" \
                 --arg desc "$body_trunc" \
                 '{
-                  content: "@everyone",
                   username: "RSLTools - Mise à jour",
                   allowed_mentions: { parse: [] },
                   embeds: [{
