@@ -13,9 +13,60 @@ jobs:
       group: release-discord
       cancel-in-progress: false
     steps:
-      - name: Wait for GitHub propagation
+      - name: Wait 3 minutes after publish
         run: |
-          echo "Waiting 180s for assets (latest.yml, exe) to propagate..."
+          echo "Waiting 180s for propagation…"
+          sleep 180
+
+      - name: Wait until release is ready (body + latest.yml)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -e
+          owner="${REPO%/*}"
+          repo="${REPO#*/}"
+
+          echo "::group::Check non-empty release body"
+          for i in {1..20}; do
+            body_len=$(curl -sS -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$owner/$repo/releases/tags/$TAG" \
+              | jq -r '.body // ""' | wc -c)
+            if [ "$body_len" -gt 5 ]; then
+              echo "Body OK (length=$body_len)"; break
+            fi
+            echo "Body empty, retry $i/20…"; sleep 30
+            if [ "$i" -eq 20 ]; then echo "Timeout waiting body"; exit 1; fi
+          done
+          echo "::endgroup::"
+
+          echo "::group::Resolve latest.yml URL"
+          LATEST_URL=$(curl -sS -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$owner/$repo/releases/tags/$TAG" \
+            | jq -r '.assets[] | select(.name=="latest.yml") | .browser_download_url')
+          if [ -z "$LATEST_URL" ] || [ "$LATEST_URL" = "null" ]; then
+            echo "latest.yml not found in assets"; exit 1
+          fi
+          echo "latest.yml: $LATEST_URL"
+          echo "::endgroup::"
+
+          echo "::group::Wait latest.yml reachable"
+          for i in {1..20}; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "$LATEST_URL")
+            if [ "$code" = "200" ]; then echo "latest.yml OK (200)"; break; fi
+            echo "latest.yml $code, retry $i/20…"; sleep 30
+            if [ "$i" -eq 20 ]; then echo "Timeout waiting latest.yml"; exit 1; fi
+          done
+          echo "::endgroup::"
+
+          # Expose release body pour l'étape suivante
+          curl -sS -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$owner/$repo/releases/tags/$TAG" \
+            | jq -r '.body // ""' > body.txt
 
       - name: Post release to Discord
         continue-on-error: true
@@ -23,9 +74,10 @@ jobs:
           WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           TAG: ${{ github.event.release.tag_name }}
           URL: ${{ github.event.release.html_url }}
-          BODY: ${{ github.event.release.body }}
         run: |
+          BODY="$(cat body.txt)"
           body_trunc="$(printf '%s' "$BODY" | head -c 1800)"
+
           jq -n --arg title "Mise à jour disponible ($TAG)" \
                 --arg url "$URL" \
                 --arg desc "$body_trunc" \
