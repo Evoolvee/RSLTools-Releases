@@ -33,7 +33,7 @@ jobs:
                 '{
                   content: "@everyone",
                   username: "RSLTools - Mise à jour",
-                  allowed_mentions: { parse: ["everyone"] },
+                  allowed_mentions: { parse: [] },
                   embeds: [{
                     title: $title,
                     url: $url,
